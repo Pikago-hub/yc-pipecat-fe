@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import DailyIframe from "@daily-co/daily-js";
+import DailyIframe, { DailyCall } from "@daily-co/daily-js";
+import Image from "next/image";
 
 export default function RoomPage() {
   const dailyRoomUrl =
     process.env.NEXT_PUBLIC_DAILY_ROOM_URL || "YOUR_DAILY_ROOM_URL";
   const containerRef = useRef<HTMLDivElement>(null);
-  const callObjectRef = useRef<any>(null);
+  const callObjectRef = useRef<DailyCall | null>(null);
   const [currentSlide, setCurrentSlide] = useState<number | null>(null);
 
   useEffect(() => {
@@ -77,7 +78,7 @@ export default function RoomPage() {
     // Cleanup
     return () => {
       if (callObjectRef.current) {
-        callObjectRef.current.destroy().catch((err: any) => {
+        callObjectRef.current.destroy().catch((err: unknown) => {
           console.error("Error destroying call object:", err);
         });
         callObjectRef.current = null;
@@ -97,18 +98,19 @@ export default function RoomPage() {
 
           {/* Slides - Full Screen */}
           <div className="w-full h-full bg-black flex flex-col items-center justify-center p-8">
-            <div className="w-full h-full flex flex-col items-center justify-center">
-              <img
+            <div className="w-full h-full flex flex-col items-center justify-center relative">
+              <Image
                 src={`/slides/slide-${currentSlide}.jpg`}
                 alt={`Slide ${currentSlide}`}
-                className="max-w-full max-h-full object-contain"
+                fill
+                className="object-contain"
                 onError={(e) => {
                   console.error(`Failed to load slide ${currentSlide}`);
                   // Try .png if .jpg fails
                   e.currentTarget.src = `/slides/slide-${currentSlide}.png`;
                 }}
               />
-              <div className="mt-4 text-white text-sm bg-black/50 px-4 py-2 rounded">
+              <div className="mt-4 text-white text-sm bg-black/50 px-4 py-2 rounded absolute bottom-0">
                 Slide {currentSlide}
               </div>
             </div>
