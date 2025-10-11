@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import DailyIframe, { DailyCall } from "@daily-co/daily-js";
 import RevealSlides, { RevealSlidesHandle } from "@/components/RevealSlides";
+import { marked } from "marked";
 
 interface SlideData {
   id: string;
@@ -36,18 +37,9 @@ export default function RoomPage() {
         slideIdToIndexMap.current = idMap;
         console.log("Slide ID mapping:", Object.fromEntries(idMap));
 
-        // Convert markdown to HTML slides
+        // Convert markdown to HTML slides using marked
         const htmlSlides = slidesData.map((slide) => {
-          // Simple markdown to HTML conversion
-          const html = slide.rawMd
-            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-            .replace(/\n\n/g, '</p><p>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>');
-
-          return html;
+          return marked.parse(slide.rawMd, { async: false }) as string;
         });
         setSlides(htmlSlides);
         console.log("Loaded", htmlSlides.length, "slides from localStorage");
