@@ -2,14 +2,60 @@
 
 import { useEffect, useRef, useState } from "react";
 import DailyIframe, { DailyCall } from "@daily-co/daily-js";
-import Image from "next/image";
+import RevealSlides, { RevealSlidesHandle } from "@/components/RevealSlides";
+
+interface SlideData {
+  id: string;
+  title: string;
+  aiNotes: string;
+  rawMd: string;
+  presenterNotes?: string;
+}
 
 export default function RoomPage() {
-  const dailyRoomUrl =
-    process.env.NEXT_PUBLIC_DAILY_ROOM_URL || "YOUR_DAILY_ROOM_URL";
+  const dailyRoomUrl = process.env.NEXT_PUBLIC_DAILY_ROOM_URL;
   const containerRef = useRef<HTMLDivElement>(null);
   const callObjectRef = useRef<DailyCall | null>(null);
-  const [currentSlide, setCurrentSlide] = useState<number | null>(null);
+  const revealRef = useRef<RevealSlidesHandle>(null);
+  const [isPresentationMode, setIsPresentationMode] = useState(false);
+  const [slides, setSlides] = useState<string[]>([]);
+  const slideIdToIndexMap = useRef<Map<string, number>>(new Map());
+
+  // Load slides from localStorage
+  useEffect(() => {
+    const storedSlides = localStorage.getItem('slidesData');
+    if (storedSlides) {
+      try {
+        const slidesData: SlideData[] = JSON.parse(storedSlides);
+
+        // Create ID to index mapping
+        const idMap = new Map<string, number>();
+        slidesData.forEach((slide, index) => {
+          idMap.set(slide.id, index);
+        });
+        slideIdToIndexMap.current = idMap;
+        console.log("Slide ID mapping:", Object.fromEntries(idMap));
+
+        // Convert markdown to HTML slides
+        const htmlSlides = slidesData.map((slide) => {
+          // Simple markdown to HTML conversion
+          const html = slide.rawMd
+            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+            .replace(/\n\n/g, '</p><p>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+          return html;
+        });
+        setSlides(htmlSlides);
+        console.log("Loaded", htmlSlides.length, "slides from localStorage");
+      } catch (error) {
+        console.error("Error loading slides from localStorage:", error);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current || callObjectRef.current) return;
@@ -64,7 +110,29 @@ export default function RoomPage() {
       if (event.data?.type === "slide") {
         const slideId = event.data.slideId;
         console.log("Switching to slide:", slideId);
-        setCurrentSlide(slideId);
+
+        // Look up slide index from ID
+        const slideIndex = slideIdToIndexMap.current.get(slideId);
+        if (slideIndex === undefined) {
+          console.error("Unknown slide ID:", slideId);
+          return;
+        }
+
+        // Enter presentation mode if not already
+        setIsPresentationMode((prev) => {
+          if (!prev) return true;
+          return prev;
+        });
+
+        // Navigate to the slide
+        if (revealRef.current) {
+          console.log(`Navigating to slide ${slideId} (index ${slideIndex})`);
+          revealRef.current.goToSlide(slideIndex);
+        }
+      } else if (event.data?.type === "slide-next") {
+        revealRef.current?.next();
+      } else if (event.data?.type === "slide-prev") {
+        revealRef.current?.prev();
       } else {
         console.log("Ignoring non-slide message:", event.data);
       }
@@ -88,7 +156,7 @@ export default function RoomPage() {
 
   return (
     <div className="flex h-screen w-full bg-background">
-      {currentSlide ? (
+      {isPresentationMode ? (
         // Presentation mode: Small video + Large slides
         <>
           {/* Video Call - Small Bottom Left Corner */}
@@ -96,24 +164,9 @@ export default function RoomPage() {
             <div ref={containerRef} className="h-full w-full" />
           </div>
 
-          {/* Slides - Full Screen */}
-          <div className="w-full h-full bg-black flex flex-col items-center justify-center p-8">
-            <div className="w-full h-full flex flex-col items-center justify-center relative">
-              <Image
-                src={`/slides/slide-${currentSlide}.jpg`}
-                alt={`Slide ${currentSlide}`}
-                fill
-                className="object-contain"
-                onError={(e) => {
-                  console.error(`Failed to load slide ${currentSlide}`);
-                  // Try .png if .jpg fails
-                  e.currentTarget.src = `/slides/slide-${currentSlide}.png`;
-                }}
-              />
-              <div className="mt-4 text-white text-sm bg-black/50 px-4 py-2 rounded absolute bottom-0">
-                Slide {currentSlide}
-              </div>
-            </div>
+          {/* Reveal.js Slides - Full Screen */}
+          <div className="w-full h-full bg-black">
+            <RevealSlides ref={revealRef} initialSlides={slides} />
           </div>
         </>
       ) : (
